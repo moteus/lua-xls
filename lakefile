@@ -1,0 +1,68 @@
+PROJECT = 'xls'
+
+if LUA_VER == '5.2' then
+  LUA_NEED = 'lua52'
+  LUA_DIR = ENV.LUA_DIR_5_2 or ENV.LUA_DIR
+  LUA_RUNNER = 'lua52'
+else
+  LUA_NEED = 'lua51'
+  LUA_DIR = ENV.LUA_DIR
+  LUA_RUNNER = 'lua'
+end
+
+ROOT    = ROOT or J(LUA_DIR, 'libs', PROJECT)
+LUADIR  = LUADIR or J(ROOT, 'share')
+LIBDIR  = LIBDIR or J(ROOT, 'share')
+DYNAMIC = as_bool(DYNAMIC, false)
+WINVER  = IF(WINDOWS, WINVER or '501', '')
+
+DEFINES = L{
+  IF(DEBUG, {'_DEBUG', 'DEBUG'},'NDEBUG');
+  IF(WINDOWS,{'WIN32','_WIN32','_WINDOWS','WINDOWS'});
+  IF(WINDOWS,'_WIN32_WINNT=0x0' .. WINVER);
+  -- IF(MSVC, '_CRT_SECURE_NO_WARNINGS');
+}
+
+xls = cpp.shared{PROJECT,
+  base = '.';
+  src  = {'lxls.cpp', 'ExcelFormat/BasicExcel.cpp', 'ExcelFormat/ExcelFormat.cpp'};
+  defines = DEFINES;
+  dynamic = DYNAMIC;
+  needs = {LUA_NEED};
+  incdir = 'ExcelFormat';
+  libflags = IF(MSVC, '/EXPORT:luaopen_'..PROJECT)
+}
+target(PROJECT, xls)
+
+install = target('install', {
+  file.group{odir = LIBDIR; src = xls};
+  file.group{odir=J(ROOT, 'doc'), src = J('doc','*'), recurse=true};
+  file.group{odir=J(ROOT, 'test'), src = J('tests','*.*'), recurse=true};
+})
+
+
+function clean_test()
+  local test_dir = J(ROOT, 'test')
+  lake.chdir(test_dir)
+  os.remove('big-example.xls')
+  os.remove('example1.xls')
+  os.remove('example2.xls')
+  os.remove('example3.xls')
+  os.remove('example3-out.xls')
+  os.remove('example4.xls')
+  lake.chdir("<")
+end
+
+target('test', install, function()
+  run_test('examples.lua')
+  -- run_test('printxls.lua', 'big-example.xls')
+  run_test('printxls.lua', 'example1.xls')
+  run_test('printxls.lua', 'example2.xls')
+  run_test('printxls.lua', 'example3.xls')
+  run_test('printxls.lua', 'example3-out.xls')
+  run_test('printxls.lua', 'example4.xls')
+  if not TESTING then clean_test() end
+end)
+
+target('build', {xls})
+
